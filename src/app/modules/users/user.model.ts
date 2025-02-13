@@ -1,38 +1,36 @@
 import httpStatus from 'http-status'
-import { RowDataPacket } from 'mysql2'
-import {connection} from '../../../config/db'
+import { ResultSetHeader, RowDataPacket } from 'mysql2'
+import connection from '../../../config/db'
 import ApiError from '../../../errors/ApiError'
 import { UserQueries } from '../../../queries/userQueries'
 import { IUser } from './user.interface'
 
 const createUser = (user: IUser): Promise<Partial<IUser>> => {
-  const { name, email, password, role, image, address } = user
+  const { name, email, password, role_id } = user;
   return new Promise((resolve, reject) => {
-    connection.query(
+    connection.query<ResultSetHeader>(
       UserQueries.CREATE_USER,
-      [name, email, password, role, image, address],
-      err => {
+      [name, email, password, role_id],
+      (err, result) => {
         if (err) {
           return reject(
             new ApiError(
               httpStatus.INTERNAL_SERVER_ERROR,
               'Error creating user'
             )
-          )
+          );
         }
-        const newUser = {
+        const newUser: Partial<IUser> = {
+          id: result.insertId,
           name,
           email,
-          role,
-          image,
-          address,
-        }
-        resolve(newUser)
+          role_id,
+        };
+        resolve(newUser);
       }
-    )
-  })
-}
-
+    );
+  });
+};
 const getAllUsers = (): Promise<IUser[]> => {
   return new Promise((resolve, reject) => {
     connection.query(UserQueries.GET_ALL_USERS, (err, results) => {
@@ -84,11 +82,11 @@ const updateUser = (
   id: number,
   userUpdates: Partial<IUser>
 ): Promise<IUser> => {
-  const { name, email, password, role, image, address } = userUpdates
+  const { name, email, password, role_id } = userUpdates
   return new Promise((resolve, reject) => {
     connection.query(
       UserQueries.UPDATE_USER,
-      [name, email, password, role, image, address, id],
+      [name, email, password, role_id, id],
       (err, results) => {
         if (err)
           return reject(

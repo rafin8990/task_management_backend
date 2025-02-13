@@ -1,10 +1,14 @@
 import mysql from 'mysql2';
+import config from '.';
 
-export const connection = mysql.createConnection({
-  host: 'localhost',           
-  user: 'root',         
-  password: '',     
-  database: 'cricketangon',     
+const connection = mysql.createConnection({
+  host: config.database.host,           
+  user: config.database.username,         
+  password: config.database.password,     
+  database: config.database.database,   
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,  
 });
 
 connection.connect((err) => {
@@ -14,5 +18,7 @@ connection.connect((err) => {
   }
   console.log('Connected to the MySQL database Successfully.');
 });
+
+export default connection;
 
 
