@@ -15,28 +15,45 @@ const loginUser = async (payload: ILoginUser): Promise<ILoginUserResponse> => {
   const { email, password } = payload
 
   try {
-    const getUserQuery = `SELECT u.*, r.name AS role 
-                          FROM users u 
-                          JOIN user_roles ur ON u.id = ur.user_id 
-                          JOIN roles r ON ur.role_id = r.id 
-                          WHERE u.email = ?`
+    const getUserQuery = `
+      SELECT u.*, r.name AS role 
+      FROM users u 
+      JOIN user_roles ur ON u.id = ur.user_id 
+      JOIN roles r ON ur.role_id = r.id 
+      WHERE u.email = ?
+    `
 
     const [userRows]: any = await connection
       .promise()
       .query(getUserQuery, [email])
 
-    if (userRows.length === 0) {
+    if (!userRows || userRows.length === 0) {
+      console.error('Login Error: No user found with the given email')
       throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid email or password')
     }
 
     const user = userRows[0]
 
+    if (!user.password) {
+      console.error('Login Error: Password field is missing for user:', user)
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid email or password')
+    }
+
     const isPasswordValid = await bcrypt.compare(password, user.password)
     if (!isPasswordValid) {
+      console.error('Login Error: Password does not match for user:', email)
       throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid email or password')
     }
 
     const role = user.role
+
+    if (!config.jwt_secret || !config.jwt_refresh_secret) {
+      console.error('Login Error: Missing JWT secrets in config')
+      throw new ApiError(
+        httpStatus.INTERNAL_SERVER_ERROR,
+        'Login failed due to server error'
+      )
+    }
 
     const accessToken = jwtHelpers.createToken(
       {
@@ -64,7 +81,15 @@ const loginUser = async (payload: ILoginUser): Promise<ILoginUserResponse> => {
     }
   } catch (error: any) {
     console.error('Error logging in user:', error)
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Login failed')
+
+    if (error instanceof ApiError) {
+      throw error 
+    }
+
+    throw new ApiError(
+      httpStatus.INTERNAL_SERVER_ERROR,
+      'Login failed due to an unexpected error'
+    )
   }
 }
 

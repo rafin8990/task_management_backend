@@ -27,7 +27,6 @@ connection.query(createTableQuery, (err, result) => {
   } else {
     console.log('Table created successfully:', result);
 
-    // Now create indexes
     connection.query(createIndexUserQuery, (err, result) => {
       if (err) {
         console.error('Error creating user_id index:', err);
