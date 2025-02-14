@@ -37,6 +37,16 @@ const getTaskById = catchAsync(async (req: Request, res: Response) => {
     data: task,
   });
 });
+const getTaskByUserId = catchAsync(async (req: Request, res: Response) => {
+  const userId = Number(req.params.id);
+  const task = await TaskService.getTasksByUserId(userId);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    message: 'Task retrieved successfully',
+    success: true,
+    data: task,
+  });
+});
 
 const updateTask = catchAsync(async (req: Request, res: Response) => {
   const taskId = Number(req.params.id);
@@ -87,6 +97,7 @@ export const TaskController = {
   createTask,
   getAllTasks,
   getTaskById,
+  getTaskByUserId,
   updateTask,
   deleteTask,
   restoreTask,
