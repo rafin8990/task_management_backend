@@ -34,7 +34,7 @@ const createUser = async (user: IUser): Promise<Partial<IUser>> => {
     const roleId = roleResult[0].id; 
 
 
-    const hashedPassword = await bcrypt.hash(user.password, 12);
+    const hashedPassword = await bcrypt.hash(user.password as string, 12);
     const insertUserQuery = UserQueries.CREATE_USER;
     const [userResult]: any = await connection.promise().query(insertUserQuery, [user.name, user.email, hashedPassword]);
 
