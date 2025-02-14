@@ -2,38 +2,65 @@
 import bcrypt from 'bcrypt'
 import httpStatus from 'http-status'
 import { RowDataPacket } from 'mysql2'
-import  connection from '../../../config/db'
+import connection from '../../../config/db'
 import ApiError from '../../../errors/ApiError'
 import { paginationHelpers } from '../../../helper/paginationHelper'
 import { IGenericResponse } from '../../../interfaces/common'
 import { IPaginationOptions } from '../../../interfaces/pagination'
+import { UserQueries } from '../../../queries/userQueries'
 import { IUserFilter, UserSearchableFields } from './user.constant'
 import { IUser } from './user.interface'
-import { UserModel } from './user.model'
+
 
 const createUser = async (user: IUser): Promise<Partial<IUser>> => {
   try {
-    const emailCheckQuery = `SELECT * FROM users WHERE email = ?`
-    const [existingUser] = await connection
-      .promise()
-      .query(emailCheckQuery, [user.email])
+    
+    const emailCheckQuery = `SELECT * FROM users WHERE email = ?`;
+    const [existingUser] = await connection.promise().query(emailCheckQuery, [user.email]);
 
     if ((existingUser as RowDataPacket[]).length > 0) {
-      throw new ApiError(httpStatus.CONFLICT, 'Email already exists')
-    } else {
-      const hashedPassword = await bcrypt.hash(user.password, 12)
-      user.password = hashedPassword
-      const newUser = await UserModel.createUser(user)
-      return newUser
+      throw new ApiError(httpStatus.CONFLICT, 'Email already exists');
     }
+
+  
+    const role = user.role;
+    const checkRoleQuery = `SELECT id FROM roles WHERE name = ?`;
+    const [roleResult]: any = await connection.promise().query(checkRoleQuery, [role]);
+
+    if (roleResult.length === 0) {
+      throw new ApiError(httpStatus.BAD_REQUEST, `Role "${role}" does not exist`);
+    }
+
+    const roleId = roleResult[0].id; 
+
+
+    const hashedPassword = await bcrypt.hash(user.password, 12);
+    const insertUserQuery = UserQueries.CREATE_USER;
+    const [userResult]: any = await connection.promise().query(insertUserQuery, [user.name, user.email, hashedPassword]);
+
+    const userId = userResult.insertId;
+
+    const assignRoleQuery = `INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)`;
+    await connection.promise().query(assignRoleQuery, [userId, roleId]);
+
+    return {
+      name: user.name,
+      email: user.email,
+      role: role,
+    };
+
   } catch (error: any) {
+    console.error('Error creating user:', error);
+
     if (error.statusCode === 409) {
-      throw new ApiError(httpStatus.CONFLICT, 'Email already exists')
+      throw new ApiError(httpStatus.CONFLICT, 'Email already exists');
+    } else if (error.statusCode === 400) {
+      throw new ApiError(httpStatus.BAD_REQUEST, error.message);
     }
-    console.log(error)
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error creating user')
+
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error creating user');
   }
-}
+};
 
 const getAllUsers = async (
   filters: IUserFilter,
@@ -71,8 +98,6 @@ const getAllUsers = async (
       whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
     const query = `SELECT id, name, email, role, image, address FROM users ${whereClause} ${sortConditions} LIMIT ? OFFSET ?`
     queryParams.push(limit, skip)
-
-
 
     const [results] = await connection.promise().query(query, queryParams)
     const users = results as RowDataPacket[]
@@ -132,10 +157,9 @@ const getUserById = async (id: number): Promise<Partial<IUser | null>> => {
 
 const updateUser = async (
   id: number,
-  userUpdates: Partial<IUser>,
+  userUpdates: Partial<IUser>
 ): Promise<IUser> => {
   try {
-   
     const fields = Object.keys(userUpdates)
       .filter(key => userUpdates[key as keyof IUser] !== undefined)
       .map(key => `${key} = ?`)

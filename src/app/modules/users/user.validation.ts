@@ -11,11 +11,9 @@ const createUserZodSchema = z.object({
     password: z.string({
       required_error: 'Password is required',
     }).min(6, 'Password must be at least 6 characters long'),
-    role: z.enum(['user', 'admin', 'super admin'], {
+    role: z.enum(['user', 'admin'], {
       required_error: 'Role is required',
     }),
-    image: z.string().optional(),
-    address: z.string().optional(),
   }),
 });
 
@@ -25,8 +23,6 @@ const updateUserZodSchema = z.object({
     email: z.string().optional(),
     password: z.string().optional(),
     role: z.enum(['user', 'admin', 'super admin']).optional(),
-    image: z.string().optional(),
-    address: z.string().optional(),
   }),
 });
 

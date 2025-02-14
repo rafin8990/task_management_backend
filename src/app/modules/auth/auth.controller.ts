@@ -46,57 +46,9 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
     });
   });
 
-  const sendVerificationCode = catchAsync(async (req: Request, res: Response) => {
-    const { email } = req.body;
-    console.log(email)
-    const result = await AuthService.sendVerificationCode(email);
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
-      success: true,
-      message: result.message,
-    });
-  });
-  const matchVerificationCode = catchAsync(async (req: Request, res: Response) => {
-    const { email, code } = req.body
-    const result = await AuthService.matchVerificationCode(email, code)
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
-      success: true,
-      message: result.message,
-    })
-  })
 
-  const resetPassword = catchAsync(async (req: Request, res: Response) => {
-    const { email, newPassword } = req.body
-    const result = await AuthService.resetPassword(email, newPassword)
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
-      success: true,
-      message: result.message,
-    })
-  })
-
-  const changePassword = catchAsync(async (req: Request, res: Response) => {
-    const { oldPassword, newPassword } = req.body
-    const user= req.user;
-    const userId=user?.user?.id;
-    if (!userId) {
-      throw new ApiError(httpStatus.UNAUTHORIZED, 'Unauthorized')
-    }
-    const result = await AuthService.changePassword(userId, oldPassword, newPassword)
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
-      success: true,
-      message: result.message,
-    })
-  })
-  
   
   export const AuthController={
     loginUser,
     refreshToken,
-    sendVerificationCode,
-    matchVerificationCode,
-    resetPassword,
-    changePassword
   }

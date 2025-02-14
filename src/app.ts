@@ -16,16 +16,6 @@ app.use(
       "http://localhost:5174/",
       "http://localhost:3000",
       "http://localhost:3000/",
-      "https://cricketangon.com",
-      "https://cricketangon.com/",
-      "https://cricketangon.com",
-      "https://cricketangon.com/",
-      "http://cricketangon.com",
-      "http://cricketangon.com/",
-      "https://cricketangon-client.vercel.app",
-      "https://cricketangon-client.vercel.app/",
-      "http://cricketangon-client.vercel.app",
-      "http://cricketangon-client.vercel.app/",
     ],
     credentials: true,
   })
@@ -35,7 +25,6 @@ app.use(cookieParser())
 //parser
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 app.use('/api/v1/', router)
 app.use(globalErrorHandler)
 
