@@ -1,21 +1,14 @@
 export type IUserFilter = {
-    searchTerm: string
-    email?: string
-  }
+  searchTerm: string
+  email?: string
+}
 
-  export const UserSearchableFields = [
-    "id",
-    "name",
-    "email",
-    "role",
-    "address"
-  ]
+export const UserSearchableFields = [
+  'searchTerm',
+  'id',
+  'name',
+  'email',
+  'role',
+]
 
-  export const UserFilterableFields = [
-    'searchTerm',
-    "id",
-    "name",
-    "email",
-    "role",
-    "address"
-  ]
+export const UserFilterableFields = ['searchTerm','id', 'name', 'email', 'role']

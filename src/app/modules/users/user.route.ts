@@ -9,7 +9,8 @@ router.post('/', validateRequest(UserValidation.createUserZodSchema),UserControl
 router.get('/', UserController.getAllUsers);
 router.get('/:id', UserController.getUserById);
 router.patch('/:id',validateRequest(UserValidation.updateUserZodSchema), UserController.updateUser);
-router.delete('/:id', UserController.deleteUser);
+router.patch('/delete/:id', UserController.deleteUser);
+router.patch('/restore/:id', UserController.restoreUser);
 
 export const userRoutes = router
 

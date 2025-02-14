@@ -8,7 +8,7 @@ import { paginationHelpers } from '../../../helper/paginationHelper'
 import { IGenericResponse } from '../../../interfaces/common'
 import { IPaginationOptions } from '../../../interfaces/pagination'
 import { UserQueries } from '../../../queries/userQueries'
-import { IUserFilter, UserSearchableFields } from './user.constant'
+import { IUserFilter, UserFilterableFields, UserSearchableFields } from './user.constant'
 import { IUser } from './user.interface'
 
 
@@ -74,29 +74,44 @@ const getAllUsers = async (
     const whereConditions: string[] = []
     const queryParams: any[] = []
 
+    whereConditions.push(`u.deleted_at IS NULL`)
+
     if (searchTerm) {
-      const searchConditions = UserSearchableFields.map(
-        field => `${field} LIKE ?`
-      ).join(' OR ')
+      const searchConditions = UserSearchableFields.filter(
+        field => field !== 'searchTerm'
+      )
+        .map(field => `u.${field} LIKE ?`)
+        .join(' OR ')
       whereConditions.push(`(${searchConditions})`)
       queryParams.push(...UserSearchableFields.map(() => `%${searchTerm}%`))
     }
 
     if (Object.keys(filtersData).length > 0) {
       Object.entries(filtersData).forEach(([field, value]) => {
-        whereConditions.push(`${field} = ?`)
-        queryParams.push(value)
+        if (UserFilterableFields.includes(field)) {
+          whereConditions.push(`u.${field} = ?`)
+          queryParams.push(value)
+        }
       })
     }
 
     const sortConditions =
-      sortBy && ['id', 'name', 'email', 'role'].includes(sortBy)
-        ? `ORDER BY ${sortBy} ${sortOrder || 'asc'}`
+      sortBy && UserFilterableFields.includes(sortBy)
+        ? `ORDER BY u.${sortBy} ${sortOrder || 'ASC'}`
         : ''
 
     const whereClause =
       whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
-    const query = `SELECT id, name, email, role, image, address FROM users ${whereClause} ${sortConditions} LIMIT ? OFFSET ?`
+
+    const query = `
+      SELECT u.id, u.name, u.email, r.name AS role 
+      FROM users u
+      JOIN user_roles ur ON u.id = ur.user_id
+      JOIN roles r ON ur.role_id = r.id
+      ${whereClause}
+      ${sortConditions}
+      LIMIT ? OFFSET ?`
+    
     queryParams.push(limit, skip)
 
     const [results] = await connection.promise().query(query, queryParams)
@@ -106,19 +121,13 @@ const getAllUsers = async (
       id: row.id,
       name: row.name,
       email: row.email,
-      password: row.password,
       role: row.role,
-      image: row.image,
-      address: row.address,
     }))
 
-    const countQuery = `SELECT COUNT(*) AS total FROM users ${whereClause}`
+    const countQuery = `SELECT COUNT(*) AS total FROM users u ${whereClause}`
     const countParams = queryParams.slice(0, -2)
-    console.log('Count Query:', countQuery)
 
-    const [countResults] = await connection
-      .promise()
-      .query(countQuery, countParams)
+    const [countResults] = await connection.promise().query(countQuery, countParams)
     const total = (countResults as RowDataPacket[])[0].total
 
     return {
@@ -138,19 +147,22 @@ const getAllUsers = async (
   }
 }
 
-const getUserById = async (id: number): Promise<Partial<IUser | null>> => {
+const getUserById = async (id: number): Promise<Partial<IUser> | null> => {
   try {
-    const user = await UserModel.getUserById(id)
-    if (!user) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User not found')
+    const getUserQuery = UserQueries.GET_USER_BY_ID
+    const [rows]: any[] = await connection.promise().query(getUserQuery, [id])
+
+    if (rows.length === 0) {
+      return null  
     }
-    const { password, ...userWithoutPassword } = user
-    console.log(password)
-    return userWithoutPassword
-  } catch (error) {
+
+    return rows[0] 
+  } catch (error: any) {
+    console.error('Error retrieving user:', error.message || error)
     throw new ApiError(
       httpStatus.INTERNAL_SERVER_ERROR,
-      'Error retrieving user'
+      'Error retrieving user',
+      error.stack || ''
     )
   }
 }
@@ -158,25 +170,22 @@ const getUserById = async (id: number): Promise<Partial<IUser | null>> => {
 const updateUser = async (
   id: number,
   userUpdates: Partial<IUser>
-): Promise<IUser> => {
+): Promise<IUser | null> => {
   try {
     const fields = Object.keys(userUpdates)
-      .filter(key => userUpdates[key as keyof IUser] !== undefined)
+      .filter(key => key !== 'role' && userUpdates[key as keyof IUser] !== undefined)
       .map(key => `${key} = ?`)
 
     const values = Object.values(userUpdates).filter(
-      value => value !== undefined
+      value => value !== undefined && value !== userUpdates.role 
     )
     values.push(id)
 
-    if (fields.length === 0) {
+    if (fields.length === 0 && !userUpdates.role) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'No updates provided')
     }
 
-    const query = `UPDATE users SET ${fields.join(
-      ', '
-    )}, updated_at = NOW() WHERE id = ?`
-
+    const query = `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`
     const [updateResult] = await connection.promise().query(query, values)
     const { affectedRows } = updateResult as { affectedRows: number }
 
@@ -184,10 +193,25 @@ const updateUser = async (
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found')
     }
 
+    if (userUpdates.role) {
+      const roleQuery = `SELECT id FROM roles WHERE name = ?`
+      const [roleRows]:any = await connection.promise().query(roleQuery, [userUpdates.role])
+
+      if (roleRows.length === 0) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Role not found')
+      }
+
+      const roleId = roleRows[0].id
+      const userRoleQuery = `UPDATE user_roles SET role_id = ? WHERE user_id = ?`
+      await connection.promise().query(userRoleQuery, [roleId, id])
+    }
+
     const [rows] = await connection.promise().query<RowDataPacket[]>(
-      `SELECT id, name, email, role, image, address, updated_at 
-      FROM users 
-      WHERE id = ?`,
+      `SELECT u.id, u.name, u.email, r.name AS role, u.updated_at
+       FROM users u
+       JOIN user_roles ur ON u.id = ur.user_id
+       JOIN roles r ON ur.role_id = r.id
+       WHERE u.id = ?`,
       [id]
     )
 
@@ -199,29 +223,73 @@ const updateUser = async (
     }
 
     const updatedUser = rows[0]
-    const { password, ...responseUser } = updatedUser
-    console.log(password)
+    const { password, ...responseUser } = updatedUser 
     return responseUser as IUser
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Error updating user:', error.message || error)
     throw new ApiError(
       httpStatus.INTERNAL_SERVER_ERROR,
       'Error updating user',
-      error instanceof Error ? error.stack : ''
+      error.stack || ''
     )
   }
 }
+
 const deleteUser = async (id: number): Promise<IUser> => {
   try {
-    const user = await UserModel.deleteUser(id)
-    if (!user) {
+    const [rows] = await connection.promise().query<RowDataPacket[]>(
+      'SELECT * FROM users WHERE id = ?',
+      [id]
+    )
+
+    if (rows.length === 0) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found')
     }
+
+    const user = rows[0] as IUser
+    const deleteQuery = UserQueries.DELETE_USER
+    const [deleteResult] = await connection.promise().query(deleteQuery, [id])
+
+    const { affectedRows } = deleteResult as { affectedRows: number }
+
+    if (affectedRows === 0) {
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error soft deleting user')
+    }
     return user
-  } catch (error) {
+  } catch (error: any) {
     console.log(error, ' line 231')
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error deleting user')
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error soft deleting user')
   }
 }
+
+const restoreUser = async (id: number): Promise<IUser> => {
+  try {
+    const [rows] = await connection.promise().query<RowDataPacket[]>(
+      'SELECT * FROM users WHERE id = ? AND deleted_at IS NOT NULL',
+      [id]
+    )
+
+    if (rows.length === 0) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'User not found or not deleted')
+    }
+
+    const user = rows[0] as IUser
+
+    const restoreQuery =UserQueries.RESTORE_USER
+    const [restoreResult] = await connection.promise().query(restoreQuery, [id])
+
+    const { affectedRows } = restoreResult as { affectedRows: number }
+
+    if (affectedRows === 0) {
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error restoring user')
+    }
+
+    return user;
+  } catch (error: any) {
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error restoring user')
+  }
+}
+
 
 export const UserService = {
   createUser,
@@ -229,4 +297,5 @@ export const UserService = {
   getUserById,
   updateUser,
   deleteUser,
+  restoreUser
 }

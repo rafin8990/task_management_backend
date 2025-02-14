@@ -41,8 +41,7 @@ const getUserById = catchAsync(async (req: Request, res: Response) => {
 const updateUser = catchAsync(async (req: Request, res: Response) => {
   const userId = Number(req.params.id);
   const userUpdates = req.body;
-  const file=req.file;
-  const user = await UserService.updateUser(userId, userUpdates,file);
+  const user = await UserService.updateUser(userId, userUpdates);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     message: 'User updated successfully',
@@ -61,6 +60,16 @@ const deleteUser = catchAsync(async (req: Request, res: Response) => {
     data: deletedUser,
   });
 });
+const restoreUser = catchAsync(async (req: Request, res: Response) => {
+  const userId = Number(req.params.id);
+  const deletedUser = await UserService.restoreUser(userId);
+  sendResponse(res, {
+    statusCode: httpStatus.OK, 
+    message: 'User Restroed successfully',
+    success: true,
+    data: deletedUser,
+  });
+});
 
 
 export const UserController = {
@@ -69,4 +78,5 @@ export const UserController = {
   getUserById,
   updateUser,
   deleteUser,
+  restoreUser
 };
